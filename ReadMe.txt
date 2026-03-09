@@ -15,3 +15,9 @@ Please contact calvin@cmpct.info for questions.
 ## Why the name LGit?
 
 This was before it had a name, so it stuck in the project file.
+
+Для сборки потребуется 
+c:\src\libgit2-built\git2.lib 
+
+git2.lib собирается с помощью
+https://github.com/tnsr1/libgit2/blob/main/build32.cmd
