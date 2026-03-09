@@ -1,4 +1,4 @@
-//Microsoft Developer Studio generated resource script.
+// Microsoft Visual C++ generated resource script.
 //
 #include "resource.h"
 
@@ -13,13 +13,11 @@
 #undef APSTUDIO_READONLY_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
-// English (U.S.) resources
+// Английский (США) resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-#ifdef _WIN32
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 #pragma code_page(1252)
-#endif //_WIN32
 
 #ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
@@ -27,18 +25,18 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 // TEXTINCLUDE
 //
 
-1 TEXTINCLUDE DISCARDABLE 
+1 TEXTINCLUDE 
 BEGIN
     "resource.h\0"
 END
 
-2 TEXTINCLUDE DISCARDABLE 
+2 TEXTINCLUDE 
 BEGIN
     "#include ""afxres.h""\r\n"
     "\0"
 END
 
-3 TEXTINCLUDE DISCARDABLE 
+3 TEXTINCLUDE 
 BEGIN
     "\r\n"
     "\0"
@@ -52,22 +50,19 @@ END
 // Dialog
 //
 
-IDD_SWAP DIALOG DISCARDABLE  0, 0, 235, 90
-STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+IDD_SWAP DIALOG 0, 0, 235, 90
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Change Source Control Provider"
 FONT 8, "MS Sans Serif"
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,123,69,50,14
     PUSHBUTTON      "Cancel",IDCANCEL,178,69,50,14
-    LTEXT           "Some IDEs cannot change between source control providers at runtime. From here, you can select what source control provider will be used for those IDEs.",
-                    IDC_STATIC,7,7,215,26
+    LTEXT           "Some IDEs cannot change between source control providers at runtime. From here, you can select what source control provider will be used for those IDEs.",IDC_STATIC,7,7,215,26
     LTEXT           "&Provider:",IDC_STATIC,7,38,29,8
-    COMBOBOX        IDC_PROVIDERS,7,51,221,30,CBS_DROPDOWNLIST | WS_VSCROLL | 
-                    WS_TABSTOP
+    COMBOBOX        IDC_PROVIDERS,7,51,221,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 END
 
 
-#ifndef _MAC
 /////////////////////////////////////////////////////////////////////////////
 //
 // Version
@@ -90,18 +85,14 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "Comments", "\0"
-            VALUE "CompanyName", "Terminal Dogma\0"
-            VALUE "FileDescription", "Swap SCC Provider\0"
-            VALUE "FileVersion", "1, 0, 0, 1\0"
-            VALUE "InternalName", "SwapSCC\0"
-            VALUE "LegalCopyright", "Copyright © 2021\0"
-            VALUE "LegalTrademarks", "\0"
-            VALUE "OriginalFilename", "SwapSCC.exe\0"
-            VALUE "PrivateBuild", "\0"
-            VALUE "ProductName", "Terminal Dogma SwapSCC\0"
-            VALUE "ProductVersion", "1, 0, 0, 1\0"
-            VALUE "SpecialBuild", "\0"
+            VALUE "CompanyName", "Terminal Dogma"
+            VALUE "FileDescription", "Swap SCC Provider"
+            VALUE "FileVersion", "1, 0, 0, 1"
+            VALUE "InternalName", "SwapSCC"
+            VALUE "LegalCopyright", "Copyright © 2021"
+            VALUE "OriginalFilename", "SwapSCC.exe"
+            VALUE "ProductName", "Terminal Dogma SwapSCC"
+            VALUE "ProductVersion", "1, 0, 0, 1"
         END
     END
     BLOCK "VarFileInfo"
@@ -110,8 +101,6 @@ BEGIN
     END
 END
 
-#endif    // !_MAC
-
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -119,7 +108,7 @@ END
 //
 
 #ifdef APSTUDIO_INVOKED
-GUIDELINES DESIGNINFO DISCARDABLE 
+GUIDELINES DESIGNINFO
 BEGIN
     IDD_SWAP, DIALOG
     BEGIN
@@ -137,14 +126,7 @@ BEGIN
 END
 #endif    // APSTUDIO_INVOKED
 
-
-/////////////////////////////////////////////////////////////////////////////
-//
-// 24
-//
-
-1                       24      DISCARDABLE     "swapscc.manifest"
-#endif    // English (U.S.) resources
+#endif    // Английский (США) resources
 /////////////////////////////////////////////////////////////////////////////
 
 

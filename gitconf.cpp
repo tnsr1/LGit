@@ -26,7 +26,7 @@ static void InitConfigEditView(HWND hwnd, LGitEditConfigDialogParams* params)
 	SetDlgItemTextW(hwnd, IDC_CONFIG_EDIT_VALUE, params->new_value);
 }
 
-static SetConfigEditParams(HWND hwnd, LGitEditConfigDialogParams* params)
+static void SetConfigEditParams(HWND hwnd, LGitEditConfigDialogParams* params)
 {
 	if (params->is_new) {
 		GetDlgItemTextW(hwnd, IDC_CONFIG_EDIT_NAME, params->new_name, 128);

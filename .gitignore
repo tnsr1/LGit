@@ -6,3 +6,5 @@ StaticRelease
 *.opt
 *.plg
 *.ncb
+
+.vs/

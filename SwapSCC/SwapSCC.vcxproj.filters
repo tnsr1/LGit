@@ -35,7 +35,4 @@
   <ItemGroup>
     <Text Include="ReadMe.txt" />
   </ItemGroup>
-  <ItemGroup>
-    <Manifest Include="swapscc.manifest" />
-  </ItemGroup>
 </Project>

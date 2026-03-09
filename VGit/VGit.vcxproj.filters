@@ -40,7 +40,4 @@
   <ItemGroup>
     <Text Include="ReadMe.txt" />
   </ItemGroup>
-  <ItemGroup>
-    <Manifest Include="VGit.manifest" />
-  </ItemGroup>
 </Project>

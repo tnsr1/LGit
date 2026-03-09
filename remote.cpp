@@ -26,7 +26,7 @@ static void InitRemoteEditView(HWND hwnd, LGitEditRemoteDialogParams* params)
 	SetDlgItemTextW(hwnd, IDC_REMOTE_EDIT_PUSHURL, buf);
 }
 
-static SetRemoteEditParams(HWND hwnd, LGitEditRemoteDialogParams* params)
+static void SetRemoteEditParams(HWND hwnd, LGitEditRemoteDialogParams* params)
 {
 	wchar_t buf[128];
 	if (params->is_new) {

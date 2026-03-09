@@ -132,6 +132,9 @@
     <ClCompile Include="winutil.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="cherry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="LGit.h">
