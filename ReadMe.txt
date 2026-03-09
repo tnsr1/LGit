@@ -21,3 +21,5 @@ c:\src\libgit2-built\git2.lib
 
 git2.lib собирается с помощью
 https://github.com/tnsr1/libgit2/blob/main/build32.cmd
+
+Для корректной работы потребется скопировать git2.dll в папку где лежит IDE.
