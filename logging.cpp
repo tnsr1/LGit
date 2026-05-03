@@ -10,6 +10,9 @@ void LGitLog(const char *format_str, ...)
 	va_end(va);
 
 	OutputDebugString(msg);
+
+	FILE* f = fopen("C:\\temp\\lgit\\lgit_log.txt", "a");
+	if (f) { fprintf(f, "%s\n", msg); fclose(f); }
 }
 
 void LGitLibraryError(HWND hWnd, LPCSTR title)
