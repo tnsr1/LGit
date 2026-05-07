@@ -305,7 +305,7 @@ SCCRTN SccPopulateList (LPVOID context,
 	return LGitPopulateList(context, nCommand, nFiles, lpFileNames, pfnPopulate, pvCallerData, lpStatus, dwFlags);
 }
 
-SCCRTN SccQueryInfo (LPVOID context, 
+SCCRTN SccQueryInfo_old (LPVOID context, 
 					 LONG nFiles, 
 					 LPCSTR* lpFileNames, 
 					 LPLONG lpStatus)
@@ -313,6 +313,30 @@ SCCRTN SccQueryInfo (LPVOID context,
 	LGitLog("**SccQueryInfo** Context=%p\n", context);
 	LGitLog("  files %d\n", nFiles);
 	return LGitPopulateList(context, (enum SCCCOMMAND)-1, nFiles, lpFileNames, NULL, NULL, lpStatus, 0);
+}
+
+SCCRTN SccQueryInfo(
+	LPVOID context,
+	LONG nFiles,
+	LPCSTR* lpFileNames,
+	LPLONG lpStatus
+)
+{
+	LGitLog("**SccQueryInfo** Context=%p\n", context);
+	LGitLog("  files %d\n", nFiles);
+
+	if (!lpStatus)
+		return SCC_E_UNKNOWNERROR;
+
+	for (LONG i = 0; i < nFiles; i++)
+	{
+		const char* file = lpFileNames[i] ? lpFileNames[i] : "<null>";
+		LGitLog("  file[%d] = %s\n", i, file);
+
+		lpStatus[i] = SCC_STATUS_NOTCONTROLLED;
+	}
+
+	return SCC_OK;
 }
 
 SCCRTN SccDirQueryInfo(LPVOID context,

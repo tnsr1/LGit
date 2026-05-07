@@ -1,11 +1,11 @@
-/*
+﻿/*
  * Project management functions that handle the connection. Done before and
  * after initialization and capabilities.
  */
 
 #include "stdafx.h"
 
-static SCCRTN LGitInitRepo(HWND hWnd, LPSTR lpProjName, LPCSTR lpLocalPath)
+static SCCRTN LGitInitRepo_old(HWND hWnd, LPSTR lpProjName, LPCSTR lpLocalPath)
 {
 	/* The repository is created, but we'll re-open in SccOpenProject */
 	git_repository *temp_repo;
@@ -34,6 +34,35 @@ static SCCRTN LGitInitRepo(HWND hWnd, LPSTR lpProjName, LPCSTR lpLocalPath)
 	default:
 		return SCC_E_UNKNOWNERROR;
 	}
+}
+
+static SCCRTN LGitInitRepo(HWND hWnd, LPSTR lpProjName, LPCSTR lpLocalPath)
+{
+	LGitLog("=== LGitInitRepo ===");
+
+	// Проверка пути
+	if (!lpLocalPath || lpLocalPath[0] == '\0')
+	{
+		LGitLog("ERROR: local path is empty");
+		return SCC_E_INITIALIZEFAILED;
+	}
+
+	git_repository* repo = NULL;
+
+	int rc = git_repository_init(&repo, lpLocalPath, 0);
+
+	if (rc != 0)
+	{
+		LGitLog("ERROR: git_repository_init failed (%d)", rc);
+		return SCC_E_UNKNOWNERROR;
+	}
+
+	LGitLog("Repo initialized successfully");
+
+	// ВАЖНО: можно сразу закрыть
+	git_repository_free(repo);
+
+	return SCC_OK;
 }
 
 LGIT_API SCCRTN LGitOpenProject(LPVOID context,
@@ -124,7 +153,7 @@ init_again:
  * Wrapper that converts to ANSI, because it would be unmanageable in the
  * normal function due to how project name stuff is handled.
  */
-SCCRTN SccOpenProject (LPVOID context,
+SCCRTN SccOpenProject_old (LPVOID context,
 					   HWND hWnd, 
 					   LPSTR lpUser,
 					   LPSTR lpProjName, /* writeable, contrary to MSDN */
@@ -134,21 +163,44 @@ SCCRTN SccOpenProject (LPVOID context,
 					   LPTEXTOUTPROC lpTextOutProc,
 					   LONG dwFlags)
 {
-	char user[SCC_USER_SIZE];
-	char projName[SCC_NAME_SIZE];
-	char auxProjPath[SCC_PRJPATH_SIZE]; /* not auxlabel, according to hdr */
-	char localProjPath[SCC_PRJPATH_SIZE];
+	char user[SCC_USER_SIZE] = { 0 };
+	char projName[SCC_NAME_SIZE] = { 0 };
+	char auxProjPath[SCC_PRJPATH_SIZE] = { 0 }; /* not auxlabel, according to hdr */
+	char localProjPath[SCC_PRJPATH_SIZE] = { 0 };
 	/* XXX: comment? not used yet */
-	LGitAnsiToUtf8(lpUser, user, SCC_USER_SIZE);
-	LGitAnsiToUtf8(lpProjName, projName, SCC_NAME_SIZE);
-	LGitAnsiToUtf8(lpAuxProjPath, auxProjPath, SCC_PRJPATH_SIZE);
+	//LGitAnsiToUtf8(lpUser, user, SCC_USER_SIZE);
+	//LGitAnsiToUtf8(lpProjName, projName, SCC_NAME_SIZE);
+	//LGitAnsiToUtf8(lpAuxProjPath, auxProjPath, SCC_PRJPATH_SIZE);
 	/* r/o and not set after */
-	LGitAnsiToUtf8(lpLocalProjPath, localProjPath, SCC_PRJPATH_SIZE);
+	//LGitAnsiToUtf8(lpLocalProjPath, localProjPath, SCC_PRJPATH_SIZE);
 	SCCRTN ret = LGitOpenProject(context, hWnd, user, projName, localProjPath, auxProjPath, lpComment, lpTextOutProc, dwFlags);
-	LGitUtf8ToAnsi(user, lpUser, SCC_USER_SIZE);
-	LGitUtf8ToAnsi(projName, lpProjName, SCC_NAME_SIZE);
-	LGitUtf8ToAnsi(auxProjPath, lpAuxProjPath, SCC_PRJPATH_SIZE);
+	//LGitUtf8ToAnsi(user, lpUser, SCC_USER_SIZE);
+	//LGitUtf8ToAnsi(projName, lpProjName, SCC_NAME_SIZE);
+	//LGitUtf8ToAnsi(auxProjPath, lpAuxProjPath, SCC_PRJPATH_SIZE);
 	return ret;
+}
+
+SCCRTN SccOpenProject(
+	LPVOID context,
+	HWND hWnd,
+	LPSTR lpUser,
+	LPSTR lpProjName,
+	LPCSTR lpLocalProjPath,
+	LPSTR lpAuxProjPath,
+	LPCSTR lpComment,
+	LPTEXTOUTPROC lpTextOutProc,
+	LONG dwFlags)
+{
+	return LGitOpenProject(
+		context,
+		hWnd,
+		lpUser,
+		lpProjName,
+		lpLocalProjPath,
+		lpAuxProjPath,
+		lpComment,
+		lpTextOutProc,
+		dwFlags);
 }
 
 SCCRTN SccCloseProject (LPVOID context)
@@ -218,7 +270,9 @@ LGIT_API SCCRTN LGitGetProjPath(LPVOID context,
 		// Repo already exists, connect to it
 		LGitLog(" ! Repo exists, connecting\n");
 		git_repository_free(temp_repo);
-		LGitGetProjectNameFromPath(lpProjName, lpLocalPath, SCC_PRJPATH_SIZE);
+
+		LGitGetProjectNameFromPath(lpProjName, lpLocalPath, SCC_NAME_LEN); // SCC_PRJPATH_SIZE);
+
 		LGitLog(" ! New proj name is %s\n", lpProjName);
 	} else if (rc == GIT_ENOTFOUND && !bAllowChangePath) {
 		// Can't change path, probably initing and importing existing files
