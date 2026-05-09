@@ -1,3 +1,5 @@
+#include <vector>
+#include <string>
 
 // The following ifdef block is the standard way of creating macros which make exporting 
 // from a DLL simpler. All files within this DLL are compiled with the LGIT_EXPORTS
@@ -65,6 +67,10 @@ typedef struct _LGitContext {
 	/* Image lists (make sure that dialogs are shared IL) and helper vars */
 	HIMAGELIST refTypeIl;
 	int bitmapHeight; /* y-adjustment when text is taller than bitmap */
+
+	// список файлов, взятых на checkout
+	std::vector<std::string> checkedOutFiles;
+
 } LGitContext;
 
 /* LGit.cpp */
@@ -120,6 +126,12 @@ SCCRTN LGitCheckoutTree(LGitContext *ctx, HWND hwnd, const git_oid *commit_oid);
 void LGitPushCheckout(LGitContext *ctx, const char *fileName);
 BOOL LGitPopCheckout(LGitContext *ctx, const char *fileName);
 BOOL LGitIsCheckout(LGitContext *ctx, const char *fileName);
+
+void LGitMarkReadOnly(const char* path);
+void LGitUnmarkReadOnly(const char* path);
+void LGitRemoveCheckout(LGitContext* ctx, const char* relPath);
+void LGitPushCheckout(LGitContext* ctx, const char* relPath);
+
 
 /* coutcflt.cpp */
 SCCRTN LGitInitCheckoutNotifyCallbacks(LGitContext *ctx, HWND hwnd, git_checkout_options *co_opts);

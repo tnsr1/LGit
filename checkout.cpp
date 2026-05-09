@@ -314,7 +314,56 @@ static SCCRTN LGitCheckoutInternal (LPVOID context,
 /**
  * Basically undoes modified changes by doing equivalent of "git checkout".
  */
-SCCRTN SccUncheckout (LPVOID context, 
+SCCRTN SccUncheckout(
+	LPVOID context,
+	HWND hWnd,
+	LONG nFiles,
+	LPCSTR* lpFileNames,
+	LONG dwFlags,
+	LPCMDOPTS pvOptions)
+{
+	LGitContext* ctx = (LGitContext*)context;
+	LGitLog("SccUncheckout ctx=%p nFiles=%ld flags=%08lX\n", ctx, nFiles, dwFlags);
+
+	if (!ctx || !ctx->repo || !lpFileNames)
+		return SCC_E_UNKNOWNERROR;
+
+	for (LONG i = 0; i < nFiles; i++)
+	{
+		const char* srcPath = lpFileNames[i];
+		if (!srcPath)
+			continue;
+
+		// Convert ANSI ? UTF?8
+		char utf8Path[2048] = { 0 };
+		LGitAnsiToUtf8(srcPath, utf8Path, sizeof(utf8Path));
+
+		// Strip base path ? repo-relative
+		const char* rel = LGitStripBasePath(ctx, utf8Path);
+		if (!rel)
+		{
+			LGitLog("  !! Can't strip base path for %s\n", utf8Path);
+			continue;
+		}
+
+		// Normalize to Git format
+		char relNorm[2048] = { 0 };
+		strncpy(relNorm, rel, sizeof(relNorm) - 1);
+		LGitTranslateStringChars(relNorm, '\\', '/');
+
+		LGitLog("  uncheckout %s (rel=%s)\n", srcPath, relNorm);
+
+		// Remove from checkout list
+		LGitRemoveCheckout(ctx, relNorm);
+
+		// Restore read-only attribute
+		LGitMarkReadOnly(srcPath);
+	}
+
+	return SCC_OK;
+}
+
+SCCRTN SccUncheckout_old (LPVOID context, 
 					  HWND hWnd, 
 					  LONG nFiles, 
 					  LPCSTR* lpFileNames, 
@@ -349,6 +398,7 @@ SCCRTN SccGet (LPVOID context,
 }
 
 /* param is ANSI, because it's what SCC provides */
+/*
 static void LGitUnmarkReadOnly(LPCSTR fileName)
 {
 	DWORD attr;
@@ -359,11 +409,14 @@ static void LGitUnmarkReadOnly(LPCSTR fileName)
 	attr &= ~FILE_ATTRIBUTE_READONLY;
 	SetFileAttributesA(fileName, attr);
 }
+*/
 
+/*
 void LGitPushCheckout(LGitContext *ctx, const char *fileName)
 {
 	ctx->checkouts->insert(std::string(fileName));
 }
+*/
 
 BOOL LGitPopCheckout(LGitContext *ctx, const char *fileName)
 {
@@ -375,12 +428,77 @@ BOOL LGitPopCheckout(LGitContext *ctx, const char *fileName)
 	return exists;
 }
 
-BOOL LGitIsCheckout(LGitContext *ctx, const char *fileName)
+BOOL LGitIsCheckout_old(LGitContext *ctx, const char *fileName)
 {
 	return ctx->checkouts->count(std::string(fileName));
 }
 
-SCCRTN SccCheckout (LPVOID context, 
+BOOL LGitIsCheckout(LGitContext* ctx, const char* relPath)
+{
+	if (!ctx || !relPath)
+		return false;
+
+	for (auto& s : ctx->checkedOutFiles)
+	{
+		if (_stricmp(s.c_str(), relPath) == 0)
+			return true;
+	}
+
+	return false;
+}
+
+
+SCCRTN SccCheckout(
+	LPVOID context,
+	HWND hWnd,
+	LONG nFiles,
+	LPCSTR* lpFileNames,
+	LPCSTR lpComment,
+	LONG dwFlags,
+	LPCMDOPTS pvOptions)
+{
+	LGitContext* ctx = (LGitContext*)context;
+	LGitLog("SccCheckout ctx=%p nFiles=%ld flags=%08lX\n", ctx, nFiles, dwFlags);
+
+	if (!ctx || !ctx->repo || !lpFileNames)
+		return SCC_E_UNKNOWNERROR;
+
+	for (LONG i = 0; i < nFiles; i++)
+	{
+		const char* srcPath = lpFileNames[i];
+		if (!srcPath)
+			continue;
+
+		// Convert ANSI ? UTF?8
+		char utf8Path[2048] = { 0 };
+		LGitAnsiToUtf8(srcPath, utf8Path, sizeof(utf8Path));
+
+		// Strip base path ? repo-relative
+		const char* rel = LGitStripBasePath(ctx, utf8Path);
+		if (!rel)
+		{
+			LGitLog("  !! Can't strip base path for %s\n", utf8Path);
+			continue;
+		}
+
+		// Normalize to Git format
+		char relNorm[2048] = { 0 };
+		strncpy(relNorm, rel, sizeof(relNorm) - 1);
+		LGitTranslateStringChars(relNorm, '\\', '/');
+
+		LGitLog("  checkout %s (rel=%s)\n", srcPath, relNorm);
+
+		// Add to checkout list
+		LGitPushCheckout(ctx, relNorm);
+
+		// Remove read-only so IDE/VFP can edit
+		LGitUnmarkReadOnly(srcPath);
+	}
+
+	return SCC_OK;
+}
+
+SCCRTN SccCheckout_old (LPVOID context, 
 					HWND hWnd, 
 					LONG nFiles, 
 					LPCSTR* lpFileNames, 
@@ -414,4 +532,71 @@ SCCRTN SccCheckout (LPVOID context,
 		LGitUnmarkReadOnly(lpFileNames[i]);
 	}
 	return SCC_OK;
+}
+
+void LGitMarkReadOnly(const char* path)
+{
+	if (!path)
+		return;
+
+	DWORD attr = GetFileAttributesA(path);
+	if (attr == INVALID_FILE_ATTRIBUTES)
+		return;
+
+	// ≈сли уже read-only Ч ничего не делаем
+	if (attr & FILE_ATTRIBUTE_READONLY)
+		return;
+
+	SetFileAttributesA(path, attr | FILE_ATTRIBUTE_READONLY);
+
+	LGitLog("  [readonly] set %s\n", path);
+}
+
+void LGitUnmarkReadOnly(const char* path)
+{
+	if (!path)
+		return;
+
+	DWORD attr = GetFileAttributesA(path);
+	if (attr == INVALID_FILE_ATTRIBUTES)
+		return;
+
+	if (attr & FILE_ATTRIBUTE_READONLY)
+	{
+		attr &= ~FILE_ATTRIBUTE_READONLY;
+		SetFileAttributesA(path, attr);
+		LGitLog("  [readonly] cleared %s\n", path);
+	}
+}
+
+void LGitRemoveCheckout(LGitContext* ctx, const char* relPath)
+{
+	if (!ctx || !relPath)
+		return;
+
+	for (auto it = ctx->checkedOutFiles.begin(); it != ctx->checkedOutFiles.end(); ++it)
+	{
+		if (_stricmp(it->c_str(), relPath) == 0)
+		{
+			ctx->checkedOutFiles.erase(it);
+			LGitLog("  [checkout] removed %s\n", relPath);
+			return;
+		}
+	}
+}
+
+void LGitPushCheckout(LGitContext* ctx, const char* relPath)
+{
+	if (!ctx || !relPath)
+		return;
+
+	// уже есть Ч не добавл€ем
+	for (auto& s : ctx->checkedOutFiles)
+	{
+		if (_stricmp(s.c_str(), relPath) == 0)
+			return;
+	}
+
+	ctx->checkedOutFiles.push_back(relPath);
+	LGitLog("  [checkout] added %s\n", relPath);
 }
