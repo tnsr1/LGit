@@ -212,7 +212,169 @@ fin:
  * We don't care if the user checked "check out again" afterwards, because it
  * must be checked out due to how git works and how we model git.
  */
-SCCRTN SccCheckin (LPVOID context, 
+
+SCCRTN SccCheckin(
+	LPVOID context,
+	HWND hWnd,
+	LONG nFiles,
+	LPCSTR* lpFileNames,
+	LPCSTR lpComment,
+	LONG dwFlags,
+	LPCMDOPTS pvOptions)
+{
+	LGitContext* ctx = (LGitContext*)context;
+	LGitLog("**SccCheckin** Context=%p\n", ctx);
+
+	if (!ctx || !ctx->repo || !lpFileNames)
+		return SCC_E_UNKNOWNERROR;
+
+	const char* comment = (lpComment && lpComment[0]) ? lpComment : "File checked in from Visual FoxPro.";
+
+	git_index* index = nullptr;
+	int err = git_repository_index(&index, ctx->repo);
+	if (err != 0 || !index)
+	{
+		LGitLog("  !! git_repository_index failed: %d\n", err);
+		return SCC_E_UNKNOWNERROR;
+	}
+
+	for (LONG i = 0; i < nFiles; i++)
+	{
+		const char* srcPath = lpFileNames[i];
+		if (!srcPath)
+			continue;
+
+		LGitLog("  staging %s\n", srcPath);
+
+		// repo-relative path
+		const char* rel = LGitStripBasePath(ctx, srcPath);
+		if (!rel)
+		{
+			LGitLog("  !! Can't strip base path for '%s'\n", srcPath);
+			continue;
+		}
+
+		char relNorm[2048] = { 0 };
+		strncpy(relNorm, rel, sizeof(relNorm) - 1);
+		LGitTranslateStringChars(relNorm, '\\', '/');
+
+		LGitLog("  relNorm='%s'\n", relNorm);
+
+		// remove from checkout list
+		LGitRemoveCheckout(ctx, relNorm);
+
+		// stage file
+		LGitLog("  git_index_add_bypath('%s')\n", relNorm);
+		err = git_index_add_bypath(index, relNorm);
+		if (err != 0)
+		{
+			LGitLog("  !! git_index_add_bypath failed for '%s': %d\n", relNorm, err);
+			continue;
+		}
+
+		char normPath[MAX_PATH] = { 0 };
+		strncpy(normPath, srcPath, MAX_PATH - 1);
+
+		// Приводим к нижнему регистру и заменяем / на \
+
+		for (char* p = normPath; *p; p++)
+		{
+			if (*p == '/')
+				*p = '\\';
+			*p = (char)tolower((unsigned char)*p);
+		}
+
+		// back to read-only
+		LGitMarkReadOnly(normPath);
+
+		DWORD attrAfter = GetFileAttributesA(srcPath);
+		LGitLog("  After Checkin: attr=%08X\n", attrAfter);
+
+	}
+
+	LGitLog("  git_index_write\n");
+	err = git_index_write(index);
+	if (err != 0)
+	{
+		LGitLog("  !! git_index_write failed: %d\n", err);
+		git_index_free(index);
+		return SCC_E_UNKNOWNERROR;
+	}
+
+	size_t entryCount = git_index_entrycount(index);
+	LGitLog("  index entrycount = %zu\n", entryCount);
+	if (entryCount == 0)
+	{
+		LGitLog("  No staged files — skipping commit\n");
+		git_index_free(index);
+		return SCC_OK;
+	}
+
+	git_oid treeOid;
+	LGitLog("  git_index_write_tree\n");
+	err = git_index_write_tree(&treeOid, index);
+	if (err != 0)
+	{
+		LGitLog("  !! git_index_write_tree failed: %d\n", err);
+		git_index_free(index);
+		return SCC_E_UNKNOWNERROR;
+	}
+
+	git_tree* tree = nullptr;
+	err = git_tree_lookup(&tree, ctx->repo, &treeOid);
+	if (err != 0 || !tree)
+	{
+		LGitLog("  !! git_tree_lookup failed: %d\n", err);
+		git_index_free(index);
+		return SCC_E_UNKNOWNERROR;
+	}
+
+	// parent commit (HEAD, если есть)
+	git_oid parentOid;
+	git_commit* parent = nullptr;
+	if (git_reference_name_to_id(&parentOid, ctx->repo, "HEAD") == 0)
+	{
+		if (git_commit_lookup(&parent, ctx->repo, &parentOid) != 0)
+			parent = nullptr;
+	}
+
+	const git_commit* parents[1] = { parent };
+	size_t parentCount = parent ? 1 : 0;
+
+	git_signature* sig = nullptr;
+	git_signature_now(&sig, "Visual FoxPro", "vfp@example.com");
+
+	git_oid commitOid;
+	LGitLog("  git_commit_create\n");
+	err = git_commit_create(
+		&commitOid,
+		ctx->repo,
+		"HEAD",
+		sig,
+		sig,
+		nullptr,
+		comment,
+		tree,
+		parentCount,
+		parentCount ? parents : nullptr);
+
+	git_signature_free(sig);
+	git_tree_free(tree);
+	git_index_free(index);
+	if (parent)
+		git_commit_free(parent);
+
+	if (err != 0)
+	{
+		LGitLog("  !! git_commit_create failed: %d\n", err);
+		return SCC_E_UNKNOWNERROR;
+	}
+
+	LGitLog("  Commit OK\n");
+	return SCC_OK;
+}
+
+SCCRTN SccCheckin_old (LPVOID context, 
 				   HWND hWnd, 
 				   LONG nFiles, 
 				   LPCSTR* lpFileNames, 
@@ -469,4 +631,73 @@ fail:
 	git_index_free(index);
 	git_signature_free(signature);
 	return inner_ret;
+}
+
+int LGitCommitFiles(LGitContext* ctx, LPCSTR* files, LONG nFiles, const char* message)
+{
+	git_index* index = NULL;
+	int err = git_repository_index(&index, ctx->repo);
+	if (err != 0)
+		return err;
+
+	// Добавляем файлы в индекс
+	for (LONG i = 0; i < nFiles; i++)
+	{
+		const char* path = files[i];
+		if (!path)
+			continue;
+
+		char utf8[2048] = { 0 };
+		LGitAnsiToUtf8(path, utf8, sizeof(utf8));
+
+		const char* rel = LGitStripBasePath(ctx, utf8);
+		if (!rel)
+			continue;
+
+		char relNorm[2048] = { 0 };
+		strncpy(relNorm, rel, sizeof(relNorm) - 1);
+		LGitTranslateStringChars(relNorm, '\\', '/');
+
+		git_index_add_bypath(index, relNorm);
+	}
+
+	git_index_write(index);
+
+	// Создаём tree
+	git_oid tree_oid;
+	git_tree* tree = NULL;
+	git_index_write_tree(&tree_oid, index);
+	git_tree_lookup(&tree, ctx->repo, &tree_oid);
+
+	// HEAD commit
+	git_oid parent_oid;
+	git_commit* parent = NULL;
+	if (git_reference_name_to_id(&parent_oid, ctx->repo, "HEAD") == 0)
+		git_commit_lookup(&parent, ctx->repo, &parent_oid);
+
+	// Автор
+	git_signature* sig = NULL;
+	git_signature_now(&sig, "LGit", "lgit@example.com");
+
+	// Commit
+	git_oid commit_oid;
+	err = git_commit_create_v(
+		&commit_oid,
+		ctx->repo,
+		"HEAD",
+		sig,
+		sig,
+		NULL,
+		message ? message : "Checkin",
+		tree,
+		parent ? 1 : 0,
+		parent
+	);
+
+	git_signature_free(sig);
+	git_tree_free(tree);
+	git_index_free(index);
+	if (parent) git_commit_free(parent);
+
+	return err;
 }

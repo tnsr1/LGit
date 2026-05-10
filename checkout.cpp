@@ -334,29 +334,27 @@ SCCRTN SccUncheckout(
 		if (!srcPath)
 			continue;
 
-		// Convert ANSI ? UTF?8
-		char utf8Path[2048] = { 0 };
-		LGitAnsiToUtf8(srcPath, utf8Path, sizeof(utf8Path));
+		LGitLog("  raw srcPath = '%s'\n", srcPath);
 
-		// Strip base path ? repo-relative
-		const char* rel = LGitStripBasePath(ctx, utf8Path);
+		// Получаем путь относительно репозитория (ANSI ? ANSI)
+		const char* rel = LGitStripBasePath(ctx, srcPath);
 		if (!rel)
 		{
-			LGitLog("  !! Can't strip base path for %s\n", utf8Path);
+			LGitLog("  !! Can't strip base path for '%s'\n", srcPath);
 			continue;
 		}
 
-		// Normalize to Git format
+		// Нормализуем слеши
 		char relNorm[2048] = { 0 };
 		strncpy(relNorm, rel, sizeof(relNorm) - 1);
 		LGitTranslateStringChars(relNorm, '\\', '/');
 
-		LGitLog("  uncheckout %s (rel=%s)\n", srcPath, relNorm);
+		LGitLog("  uncheckout rel='%s'\n", relNorm);
 
-		// Remove from checkout list
+		// Удаляем из списка checkout
 		LGitRemoveCheckout(ctx, relNorm);
 
-		// Restore read-only attribute
+		// Возвращаем read-only
 		LGitMarkReadOnly(srcPath);
 	}
 
@@ -447,7 +445,6 @@ BOOL LGitIsCheckout(LGitContext* ctx, const char* relPath)
 	return false;
 }
 
-
 SCCRTN SccCheckout(
 	LPVOID context,
 	HWND hWnd,
@@ -469,29 +466,29 @@ SCCRTN SccCheckout(
 		if (!srcPath)
 			continue;
 
-		// Convert ANSI ? UTF?8
-		char utf8Path[2048] = { 0 };
-		LGitAnsiToUtf8(srcPath, utf8Path, sizeof(utf8Path));
+		// ? Больше НИКАКИХ конвертаций — работаем с исходным ANSI путём
+		LGitLog("  raw srcPath = '%s'\n", srcPath);
 
-		// Strip base path ? repo-relative
-		const char* rel = LGitStripBasePath(ctx, utf8Path);
+		// Получаем путь относительно репозитория
+		const char* rel = LGitStripBasePath(ctx, srcPath);
 		if (!rel)
 		{
-			LGitLog("  !! Can't strip base path for %s\n", utf8Path);
+			LGitLog("  !! Can't strip base path for '%s'\n", srcPath);
 			continue;
 		}
 
-		// Normalize to Git format
+		// Нормализуем путь (только слеши)
 		char relNorm[2048] = { 0 };
 		strncpy(relNorm, rel, sizeof(relNorm) - 1);
 		LGitTranslateStringChars(relNorm, '\\', '/');
 
-		LGitLog("  checkout %s (rel=%s)\n", srcPath, relNorm);
+		LGitLog("  checkout rel='%s'\n", relNorm);
+		LGitLog("  PUSH CHECKOUT '%s'\n", relNorm);
 
-		// Add to checkout list
+		// Добавляем в список checkout
 		LGitPushCheckout(ctx, relNorm);
 
-		// Remove read-only so IDE/VFP can edit
+		// Снимаем read-only
 		LGitUnmarkReadOnly(srcPath);
 	}
 
@@ -569,20 +566,63 @@ void LGitUnmarkReadOnly(const char* path)
 	}
 }
 
-void LGitRemoveCheckout(LGitContext* ctx, const char* relPath)
+void LGitRemoveCheckout_old(LGitContext* ctx, const char* relPath)
 {
 	if (!ctx || !relPath)
 		return;
 
-	for (auto it = ctx->checkedOutFiles.begin(); it != ctx->checkedOutFiles.end(); ++it)
+	auto& v = ctx->checkedOutFiles;
+
+	v.erase(
+		std::remove_if(
+			v.begin(),
+			v.end(),
+			[&](const std::string& s)
+			{
+				return _stricmp(s.c_str(), relPath) == 0;
+			}),
+		v.end()
+	);
+
+	LGitLog("  [checkout] removed %s\n", relPath);
+}
+
+void LGitRemoveCheckout(LGitContext* ctx, const char* relPath)
+{
+	LGitLog("=== LGitRemoveCheckout START ===\n");
+
+	if (!ctx || !relPath)
 	{
-		if (_stricmp(it->c_str(), relPath) == 0)
-		{
-			ctx->checkedOutFiles.erase(it);
-			LGitLog("  [checkout] removed %s\n", relPath);
-			return;
-		}
+		LGitLog("invalid args\n");
+		return;
 	}
+
+	LGitLog("relPath = '%s'\n", relPath);
+	LGitLog("checkedOutFiles.size() = %zu\n",
+		ctx->checkedOutFiles.size());
+
+	auto it = std::find_if(
+		ctx->checkedOutFiles.begin(),
+		ctx->checkedOutFiles.end(),
+		[&](const std::string& s)
+		{
+			return _stricmp(s.c_str(), relPath) == 0;
+		});
+
+	if (it != ctx->checkedOutFiles.end())
+	{
+		LGitLog("FOUND -> erase\n");
+
+		ctx->checkedOutFiles.erase(it);
+
+		LGitLog("erase done\n");
+	}
+	else
+	{
+		LGitLog("NOT FOUND -> no erase\n");
+	}
+
+	LGitLog("=== LGitRemoveCheckout END ===\n");
 }
 
 void LGitPushCheckout(LGitContext* ctx, const char* relPath)
@@ -590,13 +630,14 @@ void LGitPushCheckout(LGitContext* ctx, const char* relPath)
 	if (!ctx || !relPath)
 		return;
 
-	// уже есть — не добавляем
-	for (auto& s : ctx->checkedOutFiles)
+	auto& v = ctx->checkedOutFiles;
+
+	for (auto& s : v)
 	{
 		if (_stricmp(s.c_str(), relPath) == 0)
-			return;
+			return; // уже есть
 	}
 
-	ctx->checkedOutFiles.push_back(relPath);
+	v.emplace_back(relPath); // безопаснее чем push_back
 	LGitLog("  [checkout] added %s\n", relPath);
 }

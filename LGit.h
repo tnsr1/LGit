@@ -141,6 +141,9 @@ SCCRTN LGitFinishCheckoutNotify(LGitContext *ctx, HWND hwnd, git_checkout_option
 SCCRTN LGitCommitIndex(HWND hWnd, LGitContext *ctx, git_index *index, LPCSTR lpComment, git_signature *author, git_signature *committer);
 SCCRTN LGitCommitIndexAmendHead(HWND hWnd, LGitContext *ctx, git_index *index, LPCSTR lpComment, git_signature *author, git_signature *committer);
 
+int LGitCommitFiles(LGitContext* ctx, LPCSTR* files, LONG nFiles, const char* message);
+
+
 /* commitmk.cpp */
 SCCRTN LGitCreateCommitDialog(LGitContext *ctx, HWND hwnd, BOOL amend_last, const char *proposed_message, git_index *proposed_index);
 

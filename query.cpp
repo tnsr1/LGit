@@ -305,16 +305,6 @@ SCCRTN SccPopulateList (LPVOID context,
 	return LGitPopulateList(context, nCommand, nFiles, lpFileNames, pfnPopulate, pvCallerData, lpStatus, dwFlags);
 }
 
-SCCRTN SccQueryInfo_old (LPVOID context, 
-					 LONG nFiles, 
-					 LPCSTR* lpFileNames, 
-					 LPLONG lpStatus)
-{
-	LGitLog("**SccQueryInfo** Context=%p\n", context);
-	LGitLog("  files %d\n", nFiles);
-	return LGitPopulateList(context, (enum SCCCOMMAND)-1, nFiles, lpFileNames, NULL, NULL, lpStatus, 0);
-}
-
 SCCRTN SccQueryInfo(
 	LPVOID context,
 	LONG nFiles,
@@ -322,41 +312,49 @@ SCCRTN SccQueryInfo(
 	LPLONG lpStatus)
 {
 	LGitContext* ctx = (LGitContext*)context;
-	LGitLog("SccQueryInfo ctx=%p nFiles=%ld\n", ctx, nFiles);
+
+	LGitLog("SccQueryInfo ctx=%p nFiles=%ld\n",
+		ctx,
+		nFiles);
 
 	if (!ctx || !ctx->repo || !lpFileNames || !lpStatus)
 		return SCC_E_UNKNOWNERROR;
 
-	// -----------------------------
-	// Normalize workdir
-	// -----------------------------
+	// -------------------------------------------------
+	// Normalize repository workdir
+	// -------------------------------------------------
 	const char* workdir = git_repository_workdir(ctx->repo);
+
 	if (!workdir)
 		return SCC_E_UNKNOWNERROR;
 
 	char wdBuf[MAX_PATH] = { 0 };
+
 	strncpy(wdBuf, workdir, MAX_PATH - 1);
 
 	for (char* p = wdBuf; *p; p++)
 	{
 		if (*p == '/')
 			*p = '\\';
+
 		*p = (char)tolower((unsigned char)*p);
 	}
 
 	size_t wdLen = strlen(wdBuf);
+
 	if (wdLen > 0 && wdBuf[wdLen - 1] != '\\')
 	{
 		wdBuf[wdLen++] = '\\';
 		wdBuf[wdLen] = 0;
 	}
 
-	// -----------------------------
-	// Process each file
-	// -----------------------------
+	// -------------------------------------------------
+	// Process files
+	// -------------------------------------------------
 	for (LONG i = 0; i < nFiles; i++)
 	{
 		const char* path = lpFileNames[i];
+
 		LONG status = SCC_STATUS_NOTCONTROLLED;
 
 		if (!path)
@@ -365,40 +363,46 @@ SCCRTN SccQueryInfo(
 			continue;
 		}
 
+		// -------------------------------------------------
 		// File exists?
+		// -------------------------------------------------
 		DWORD attr = GetFileAttributesA(path);
+
 		if (attr == INVALID_FILE_ATTRIBUTES)
 		{
 			lpStatus[i] = SCC_STATUS_NOTCONTROLLED;
 			continue;
 		}
 
-		// -----------------------------
+		// -------------------------------------------------
 		// Normalize file path
-		// -----------------------------
+		// -------------------------------------------------
 		char fileBuf[MAX_PATH] = { 0 };
+
 		strncpy(fileBuf, path, MAX_PATH - 1);
 
 		for (char* p = fileBuf; *p; p++)
 		{
 			if (*p == '/')
 				*p = '\\';
+
 			*p = (char)tolower((unsigned char)*p);
 		}
 
-		// -----------------------------
-		// Check if file is inside repo
-		// -----------------------------
+		// -------------------------------------------------
+		// Check file inside repo
+		// -------------------------------------------------
 		if (strncmp(fileBuf, wdBuf, wdLen) != 0)
 		{
 			lpStatus[i] = SCC_STATUS_NOTCONTROLLED;
 			continue;
 		}
 
-		// -----------------------------
+		// -------------------------------------------------
 		// Convert to repo-relative path
-		// -----------------------------
+		// -------------------------------------------------
 		char relPath[MAX_PATH] = { 0 };
+
 		strncpy(relPath, fileBuf + wdLen, MAX_PATH - 1);
 
 		for (char* p = relPath; *p; p++)
@@ -407,59 +411,94 @@ SCCRTN SccQueryInfo(
 				*p = '/';
 		}
 
-		// -----------------------------
-		// Query Git status
-		// -----------------------------
+		LGitLog("  full='%s' rel='%s'\n",
+			path,
+			relPath);
+
+		// -------------------------------------------------
+		// Query git status
+		// -------------------------------------------------
 		unsigned int flags = 0;
-		int err = git_status_file(&flags, ctx->repo, relPath);
+
+		int err = git_status_file(
+			&flags,
+			ctx->repo,
+			relPath);
+
+		LGitLog("  QI: full='%s'", path);
+		LGitLog("  QI: rel='%s'", relPath);
+		LGitLog("  QI: attr=%08X", attr);
+		LGitLog("  QI: flags=%08X", flags);
+		LGitLog("  QI: isCheckout=%d", LGitIsCheckout(ctx, relPath));
 
 		if (err == GIT_ENOTFOUND)
 		{
 			lpStatus[i] = SCC_STATUS_NOTCONTROLLED;
+
+			LGitLog("  NOTCONTROLLED\n");
+
 			continue;
 		}
 
 		if (err != 0)
 		{
-			// Unknown Git error ? assume controlled
+			// Unknown git error
 			lpStatus[i] = SCC_STATUS_CONTROLLED;
+
+			LGitLog("  git_status_file error=%d\n", err);
+
 			continue;
 		}
 
-		// -----------------------------
-		// Base: file is controlled
-		// -----------------------------
+		// -------------------------------------------------
+		// Base state
+		// -------------------------------------------------
 		status = SCC_STATUS_CONTROLLED;
 
-		// -----------------------------
-		// Check if file was explicitly checked out
-		// -----------------------------
-		bool isCheckedOut = LGitIsCheckout(ctx, relPath);
-
-		// -----------------------------
+		// -------------------------------------------------
 		// Untracked
-		// -----------------------------
+		// -------------------------------------------------
 		if (flags & GIT_STATUS_WT_NEW)
 		{
 			lpStatus[i] = SCC_STATUS_NOTCONTROLLED;
+
+			LGitLog("  UNTRACKED\n");
+
 			continue;
 		}
 
-		// -----------------------------
-		// Clean file
-		// -----------------------------
+		// -------------------------------------------------
+		// Clean
+		// -------------------------------------------------
+		LGitLog("  QI: CLEAN state, isCheckout=%d, RO=%d",
+			LGitIsCheckout(ctx, relPath),
+			(attr & FILE_ATTRIBUTE_READONLY) != 0);
+
 		if (flags == GIT_STATUS_CURRENT)
 		{
-			if (isCheckedOut)
+			if (LGitIsCheckout(ctx, relPath))
+			{
+				// Файл взят в checkout ? НЕ ставим RO
 				status |= SCC_STATUS_CHECKEDOUT;
+				status |= SCC_STATUS_OUTBYUSER;
 
+				LGitLog("  QI: CLEAN + CHECKOUT -> %08lX", status);
+				lpStatus[i] = status;
+				continue;
+			}
+
+			// Файл НЕ в checkout ? ставим RO
+			if (!(attr & FILE_ATTRIBUTE_READONLY))
+				SetFileAttributesA(fileBuf, attr | FILE_ATTRIBUTE_READONLY);
+
+			LGitLog("  QI: CLEAN + CONTROLLED -> %08lX", status);
 			lpStatus[i] = status;
 			continue;
 		}
 
-		// -----------------------------
-		// Modified ? emulate checkout
-		// -----------------------------
+		// -------------------------------------------------
+		// Modified / staged / deleted / renamed
+		// -------------------------------------------------
 		if (flags & (
 			GIT_STATUS_WT_MODIFIED |
 			GIT_STATUS_WT_DELETED |
@@ -468,34 +507,37 @@ SCCRTN SccQueryInfo(
 			GIT_STATUS_INDEX_DELETED |
 			GIT_STATUS_INDEX_RENAMED))
 		{
-			status |= SCC_STATUS_OUTBYUSER;
 			status |= SCC_STATUS_CHECKEDOUT;
+			status |= SCC_STATUS_OUTBYUSER;
+
+			LGitLog("  MODIFIED flags=%08X\n",
+				flags);
 		}
 
-		// -----------------------------
+		// -------------------------------------------------
 		// Conflict
-		// -----------------------------
+		// -------------------------------------------------
 		if (flags & GIT_STATUS_CONFLICTED)
 		{
-			status |= SCC_STATUS_OUTBYUSER;
-			status |= SCC_STATUS_OUTOTHER;
 			status |= SCC_STATUS_CHECKEDOUT;
+			status |= SCC_STATUS_OUTBYUSER;
+
+			LGitLog("  CONFLICT\n");
 		}
 
-		// -----------------------------
-		// Explicit checkout overrides clean state
-		// -----------------------------
-		if (isCheckedOut)
-			status |= SCC_STATUS_CHECKEDOUT;
+		LGitLog("  QI: FINAL status=%08lX", status);
 
 		lpStatus[i] = status;
-		LGitLog("  %s ? %08lX\n", path, status);
+
+		LGitLog("  FINAL %s -> %08lX\n",
+			path,
+			status);
 	}
 
 	LGitLog("SccQueryInfo done\n");
+
 	return SCC_OK;
 }
-
 SCCRTN SccDirQueryInfo(LPVOID context,
 					   LONG nDirs,
 					   LPCSTR* lpDirNames,
